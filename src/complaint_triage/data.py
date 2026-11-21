@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import logging
 import re
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Literal
@@ -47,6 +46,9 @@ class CleaningReport:
     dropped_duplicate: int = 0
     rows_kept: int = 0
     label_counts: dict[str, int] = field(default_factory=dict)
+    # Rows that passed cleaning per class, before any per-class cap. The
+    # gap against `label_counts` is how much of each class was sampled away.
+    rows_available: dict[str, int] = field(default_factory=dict)
 
     def as_markdown(self) -> str:
         rows = [
@@ -65,45 +67,64 @@ class CleaningReport:
 # ---------------------------------------------------------------------------
 # Loading
 # ---------------------------------------------------------------------------
+def shard_paths(source: Path | None = None) -> list[Path]:
+    """Resolve a parquet file, or every shard in a directory, to a sorted list."""
+    source = source or cfg.SHARD_DIR
+    if source.is_file():
+        return [source]
+    if not source.is_dir():
+        raise FileNotFoundError(
+            f"{source} not found. Run `python scripts/download_data.py` first."
+        )
+    shards = sorted(source.glob("*.parquet"))
+    if not shards:
+        raise FileNotFoundError(
+            f"no .parquet shards in {source}. Run `python scripts/download_data.py`."
+        )
+    return shards
+
+
 def iter_raw_chunks(
-    archive: Path | None = None,
+    source: Path | None = None,
     chunksize: int = 200_000,
     nrows: int | None = None,
 ) -> Iterator[pd.DataFrame]:
-    """Stream the bulk CSV straight out of the zip.
+    """Stream the corpus in bounded batches.
 
-    The uncompressed CSV is several GB; streaming keeps peak memory bounded and
-    avoids leaving an extracted copy on disk.
+    Parquet is columnar, so only the eight columns this project uses are read
+    off disk -- the snapshot carries eighteen. Combined with row-group batching
+    that keeps peak memory flat regardless of how large the corpus grows, which
+    matters at 1.7 million narratives.
+
+    Args:
+        source: a single .parquet file, or a directory of shards.
+        chunksize: rows per yielded batch.
+        nrows: stop after this many rows, for fast iteration in notebooks.
     """
-    archive = archive or cfg.RAW_ARCHIVE
-    if not archive.exists():
-        raise FileNotFoundError(
-            f"{archive} not found. Run `python scripts/download_data.py` first."
-        )
+    import pyarrow.parquet as pq  # noqa: PLC0415
 
-    with zipfile.ZipFile(archive) as zf:
-        inner = _resolve_inner_csv(zf)
-        with zf.open(inner) as handle:
-            reader = pd.read_csv(
-                handle,
-                usecols=list(cfg.USE_COLUMNS),
-                dtype=str,
-                chunksize=chunksize,
-                nrows=nrows,
-                on_bad_lines="warn",
-                low_memory=False,
+    yielded = 0
+    for shard in shard_paths(source):
+        parquet = pq.ParquetFile(shard)
+        available = set(parquet.schema_arrow.names)
+        missing = [c for c in cfg.USE_COLUMNS if c not in available]
+        if missing:
+            raise ValueError(
+                f"{shard.name} is missing expected columns {missing}; "
+                f"it has {sorted(available)}"
             )
-            for chunk in reader:
-                yield chunk
 
-
-def _resolve_inner_csv(zf: zipfile.ZipFile) -> str:
-    names = [n for n in zf.namelist() if n.lower().endswith(".csv")]
-    if not names:
-        raise ValueError(f"No CSV inside archive; contents: {zf.namelist()}")
-    if cfg.RAW_CSV_NAME in names:
-        return cfg.RAW_CSV_NAME
-    return names[0]
+        for batch in parquet.iter_batches(
+            batch_size=chunksize, columns=list(cfg.USE_COLUMNS)
+        ):
+            frame = batch.to_pandas()
+            if nrows is not None and yielded + len(frame) > nrows:
+                frame = frame.iloc[: nrows - yielded]
+            yielded += len(frame)
+            if not frame.empty:
+                yield frame
+            if nrows is not None and yielded >= nrows:
+                return
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +173,7 @@ def clean_frame(frame: pd.DataFrame, report: CleaningReport) -> pd.DataFrame:
     frame = frame.loc[mapped].copy()
 
     frame["date_received"] = pd.to_datetime(frame[cfg.COL_DATE], errors="coerce", utc=True)
+    frame[cfg.COL_ID] = frame[cfg.COL_ID].astype(str)
     keep = [
         cfg.COL_ID,
         "date_received",
@@ -267,35 +289,95 @@ def build_dataset(
     strategy: SplitStrategy = "temporal",
     deduplicate: bool = True,
     out_path: Path | None = None,
-    archive: Path | None = None,
+    source: Path | None = None,
+    chunksize: int = 200_000,
+    seed: int = cfg.RANDOM_SEED,
 ) -> tuple[pd.DataFrame, CleaningReport]:
-    """Read, clean, optionally balance, split and persist the corpus.
+    """Read, clean, deduplicate, subsample and split the corpus in one pass.
+
+    The uncompressed CSV is ~5.9 GB and holds roughly five million published
+    narratives. Reading it, cleaning it, and only then capping per class would
+    mean holding several gigabytes of Python strings at once, so the cap is
+    applied *while streaming* instead:
+
+    * **Deduplication** uses a set of narrative hashes, so a repeated text is
+      rejected the moment it reappears rather than after everything is loaded.
+      Which copy survives is not important; that no narrative appears on both
+      sides of a split is.
+    * **Subsampling** uses per-class reservoir sampling (Algorithm R). Each
+      class keeps a uniform random sample of every row it ever saw, with memory
+      bounded by `sample_per_class`, in a single pass and without knowing the
+      class frequencies up front. Taking the first N per class instead would be
+      cheaper and wrong: the export is roughly chronological, so it would hand
+      back only the oldest complaints and leave the temporal split with no
+      recent data to test on.
 
     Args:
         nrows: cap on raw rows read, for fast iteration in notebooks.
-        sample_per_class: cap per label after cleaning. The raw corpus is
-            heavily skewed toward credit reporting; capping keeps training
-            tractable on a laptop GPU without discarding the minority classes.
+        sample_per_class: reservoir size per label. `None` keeps everything,
+            which needs a lot of memory on the full corpus.
         strategy: "temporal" (default) or "random".
-        deduplicate: drop exact duplicate narratives.
+        deduplicate: reject repeated narratives.
         out_path: parquet destination; defaults to data/processed.
-        archive: source zip; defaults to the configured raw archive.
+        source: parquet file or shard directory; defaults to data/raw/parquet.
+        chunksize: rows per read chunk.
+        seed: controls the reservoir sampling.
     """
+    import random
+
+    rng = random.Random(seed)
     report = CleaningReport()
-    cleaned: list[pd.DataFrame] = []
-    for chunk in iter_raw_chunks(archive=archive, nrows=nrows):
-        cleaned.append(clean_frame(chunk, report))
 
-    frame = pd.concat(cleaned, ignore_index=True)
-    if deduplicate:
-        frame = drop_duplicate_narratives(frame, report)
+    seen_hashes: set[int] = set()
+    reservoirs: dict[str, list[tuple]] = {}
+    counts_seen: dict[str, int] = {}
+    columns: list[str] | None = None
 
-    if sample_per_class is not None:
-        frame = cap_per_class(frame, sample_per_class)
+    for chunk in iter_raw_chunks(source=source, chunksize=chunksize, nrows=nrows):
+        cleaned = clean_frame(chunk, report)
+        if cleaned.empty:
+            continue
+        if columns is None:
+            columns = list(cleaned.columns)
 
-    frame = make_splits(frame, strategy=strategy)
+        if deduplicate:
+            hashes = cleaned["text"].map(hash)
+            fresh = ~hashes.isin(seen_hashes) & ~hashes.duplicated(keep="first")
+            report.dropped_duplicate += int((~fresh).sum())
+            cleaned = cleaned.loc[fresh]
+            seen_hashes.update(hashes.loc[fresh].tolist())
+            if cleaned.empty:
+                continue
+
+        for row in cleaned.itertuples(index=False, name=None):
+            label = row[columns.index("label")]
+            position = counts_seen.get(label, 0)
+            counts_seen[label] = position + 1
+
+            if sample_per_class is None:
+                reservoirs.setdefault(label, []).append(row)
+                continue
+
+            bucket = reservoirs.setdefault(label, [])
+            if len(bucket) < sample_per_class:
+                bucket.append(row)
+            else:
+                # Algorithm R: the (position+1)-th item replaces a uniformly
+                # chosen incumbent with probability k/(position+1).
+                candidate = rng.randrange(position + 1)
+                if candidate < sample_per_class:
+                    bucket[candidate] = row
+
+    if not reservoirs:
+        raise ValueError("no rows survived cleaning; check the source archive")
+
+    frame = pd.DataFrame(
+        [row for bucket in reservoirs.values() for row in bucket], columns=columns
+    )
+    frame = make_splits(frame, strategy=strategy, seed=seed)
     report.rows_kept = len(frame)
     report.label_counts = frame["label"].value_counts().to_dict()
+    report.rows_available = dict(counts_seen)
 
     out_path = out_path or (cfg.PROCESSED_DIR / f"complaints_{strategy}.parquet")
     out_path.parent.mkdir(parents=True, exist_ok=True)

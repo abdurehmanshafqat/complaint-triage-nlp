@@ -88,9 +88,9 @@ def report() -> None:
     print("\nlocal cache status")
     print("-" * 58)
 
-    archive_bytes = cfg.RAW_ARCHIVE.stat().st_size if cfg.RAW_ARCHIVE.exists() else 0
-    archive_ok = archive_bytes > 300_000_000
-    print(f"  {'OK ' if archive_ok else '-- '} complaint archive   {human(archive_bytes)}")
+    shard_bytes = dir_size(cfg.SHARD_DIR)
+    archive_ok = shard_bytes > 1_000_000_000
+    print(f"  {'OK ' if archive_ok else '-- '} complaint shards    {human(shard_bytes)}")
 
     hub = hf_cache_dir() / "hub"
     teacher_bytes = dir_size(hub)

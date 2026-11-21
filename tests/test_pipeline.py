@@ -1,14 +1,11 @@
-"""End-to-end pipeline test over a synthetic archive.
+"""End-to-end pipeline test over a synthetic parquet shard.
 
-Runs the real `build_dataset` against a hand-built zip, so the chunked reader,
-the cleaning funnel, deduplication, the per-class cap and the split logic are
-all exercised together without needing the 370 MB download.
+Runs the real `build_dataset` against a hand-built file, so the batched reader,
+the cleaning funnel, deduplication, reservoir sampling and the split logic are
+all exercised together without needing the 1.8 GB download.
 """
 from __future__ import annotations
 
-import csv
-import io
-import zipfile
 from pathlib import Path
 
 import pandas as pd
@@ -18,7 +15,7 @@ from complaint_triage import config as cfg
 from complaint_triage import data
 
 ROWS = [
-    # id, date, product, sub, issue, narrative, company, state
+    # id, date, product, sub-product, issue, narrative, company, state
     ("1", "2018-01-05", "Mortgage", "FHA", "Trouble paying", "I cannot reach my servicer about escrow at all", "ACME", "CA"),
     ("2", "2018-06-11", "Credit reporting", "", "Incorrect info", "There is an account on my report that is not mine whatsoever", "BUREAU", "TX"),
     # Same narrative as 2, filed later: the duplicate that must be dropped.
@@ -36,12 +33,11 @@ ROWS = [
 
 
 @pytest.fixture
-def archive(tmp_path: Path) -> Path:
-    """Build a zip with the same header names as the real CFPB export."""
-    buffer = io.StringIO()
-    writer = csv.writer(buffer)
-    writer.writerow(
-        [
+def shard(tmp_path: Path) -> Path:
+    """Build a parquet file with the same column names as the real snapshot."""
+    frame = pd.DataFrame(
+        ROWS,
+        columns=[
             cfg.COL_ID,
             cfg.COL_DATE,
             cfg.COL_PRODUCT,
@@ -50,27 +46,26 @@ def archive(tmp_path: Path) -> Path:
             cfg.COL_NARRATIVE,
             cfg.COL_COMPANY,
             cfg.COL_STATE,
-        ]
+        ],
     )
-    writer.writerows(ROWS)
-
-    path = tmp_path / "complaints.csv.zip"
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(cfg.RAW_CSV_NAME, buffer.getvalue())
+    # The real file stores an absent narrative as null, not as an empty string.
+    frame[cfg.COL_NARRATIVE] = frame[cfg.COL_NARRATIVE].replace("", None)
+    path = tmp_path / "0.parquet"
+    frame.to_parquet(path, index=False)
     return path
 
 
-def test_reader_streams_the_inner_csv(archive: Path) -> None:
-    chunks = list(data.iter_raw_chunks(archive=archive, chunksize=4))
+def test_reader_streams_in_batches(shard: Path) -> None:
+    chunks = list(data.iter_raw_chunks(source=shard, chunksize=4))
     assert sum(len(c) for c in chunks) == len(ROWS)
-    assert len(chunks) > 1, "chunksize was ignored; large files would load whole"
+    assert len(chunks) > 1, "batch_size was ignored; large files would load whole"
 
 
-def test_cleaning_funnel_accounts_for_every_dropped_row(archive: Path) -> None:
+def test_cleaning_funnel_accounts_for_every_dropped_row(shard: Path) -> None:
     report = data.CleaningReport()
     frames = [
         data.clean_frame(chunk, report)
-        for chunk in data.iter_raw_chunks(archive=archive, chunksize=100)
+        for chunk in data.iter_raw_chunks(source=shard, chunksize=100)
     ]
     frame = pd.concat(frames, ignore_index=True)
 
@@ -89,10 +84,10 @@ def test_cleaning_funnel_accounts_for_every_dropped_row(archive: Path) -> None:
     assert accounted == report.rows_read, "funnel does not balance"
 
 
-def test_build_dataset_dedupes_splits_and_persists(archive: Path, tmp_path: Path) -> None:
+def test_build_dataset_dedupes_splits_and_persists(shard: Path, tmp_path: Path) -> None:
     out = tmp_path / "out.parquet"
     frame, report = data.build_dataset(
-        strategy="temporal", archive=archive, out_path=out
+        strategy="temporal", source=shard, out_path=out
     )
 
     assert out.exists(), "dataset was not persisted"

@@ -19,13 +19,39 @@ MODEL_DIR: Final[Path] = PROJECT_ROOT / "models"
 REPORT_DIR: Final[Path] = PROJECT_ROOT / "reports"
 FIGURE_DIR: Final[Path] = REPORT_DIR / "figures"
 
-RAW_ARCHIVE: Final[Path] = RAW_DIR / "complaints.csv.zip"
-RAW_CSV_NAME: Final[str] = "complaints.csv"
+# --------------------------------------------------------------------------
+# Data source
+# --------------------------------------------------------------------------
+# A note on provenance, because it is not obvious and it matters.
+#
+# The CFPB's own bulk export (files.consumerfinance.gov/ccdb/complaints.csv.zip)
+# and its search API both return 15 columns and *no* complaint narrative. The
+# free-text field that this project classifies is no longer published there.
+#
+# We therefore train on a CC0-licensed snapshot taken while the narratives were
+# still public. Its column names are identical to the CFPB export's, so nothing
+# downstream has to know the difference. Being a frozen snapshot is a feature
+# here: results stay reproducible instead of shifting under a live feed.
+DATASET_REPO: Final[str] = "BEE-spoke-data/consumer-finance-complaints"
+DATASET_CONFIG: Final[str] = "has-text"  # pre-filtered to rows that have text
+DATASET_LICENSE: Final[str] = "CC0-1.0"
+DATASET_ROWS: Final[int] = 1_689_573
 
-DATA_URL: Final[str] = "https://files.consumerfinance.gov/ccdb/complaints.csv.zip"
-DATA_SOURCE_PAGE: Final[str] = (
+_SHARD_BASE: Final[str] = (
+    f"https://huggingface.co/api/datasets/{DATASET_REPO}/parquet/{DATASET_CONFIG}/train"
+)
+N_SHARDS: Final[int] = 3
+DATA_SHARD_URLS: Final[tuple[str, ...]] = tuple(
+    f"{_SHARD_BASE}/{index}.parquet" for index in range(N_SHARDS)
+)
+
+SHARD_DIR: Final[Path] = RAW_DIR / "parquet"
+
+DATA_SOURCE_PAGE: Final[str] = f"https://huggingface.co/datasets/{DATASET_REPO}"
+CFPB_SOURCE_PAGE: Final[str] = (
     "https://www.consumerfinance.gov/data-research/consumer-complaints/"
 )
+CFPB_DATA_USE_PAGE: Final[str] = "https://www.consumerfinance.gov/complaint/data-use/"
 
 # --------------------------------------------------------------------------
 # Source columns we care about (CFPB bulk CSV header names)
