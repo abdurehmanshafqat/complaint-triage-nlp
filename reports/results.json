@@ -1,0 +1,50 @@
+[
+  {
+    "name": "logreg-tfidf",
+    "family": "classical",
+    "accuracy": 0.7921187552164063,
+    "macro_f1": 0.7871642748824935,
+    "weighted_f1": 0.791726884446346,
+    "n_params": null,
+    "size_bytes": null,
+    "latency_ms_per_item": 0.4429442599939648,
+    "split_strategy": "temporal",
+    "notes": "reference point for the linear family",
+    "per_class_f1": {
+      "bank_account": 0.7724444444444445,
+      "card": 0.7749269756059051,
+      "credit_reporting": 0.8332618945563652,
+      "debt_collection": 0.7137455516014235,
+      "money_transfer_or_crypto": 0.7621516526247569,
+      "mortgage": 0.8938178386031147,
+      "payday_or_personal_loan": 0.6304021358251293,
+      "student_loan": 0.9040016587186398,
+      "vehicle_or_consumer_loan": 0.7997263219626625,
+      "other_financial_service": 0.0
+    }
+  },
+  {
+    "name": "linear-svm-tfidf",
+    "family": "classical",
+    "accuracy": 0.7974842017407893,
+    "macro_f1": 0.7927044647419075,
+    "weighted_f1": 0.7963582363285361,
+    "n_params": null,
+    "size_bytes": null,
+    "latency_ms_per_item": 0.4345452899906377,
+    "split_strategy": "temporal",
+    "notes": "strongest cheap baseline; the bar the neural models must clear",
+    "per_class_f1": {
+      "bank_account": 0.7745857060592488,
+      "card": 0.7762799033741136,
+      "credit_reporting": 0.8319692392199945,
+      "debt_collection": 0.7145964759625842,
+      "money_transfer_or_crypto": 0.7675623179022337,
+      "mortgage": 0.8951241950321988,
+      "payday_or_personal_loan": 0.6433440975959813,
+      "student_loan": 0.9190332326283988,
+      "vehicle_or_consumer_loan": 0.8118450149024132,
+      "other_financial_service": 0.0
+    }
+  }
+]

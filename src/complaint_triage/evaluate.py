@@ -48,6 +48,16 @@ class ModelResult:
         return None if self.size_bytes is None else self.size_bytes / 1e6
 
 
+def labels_in(frame, column: str = "label") -> list[str]:
+    """Sorted labels actually present in a dataset.
+
+    Metrics are computed against this rather than `CANONICAL_LABELS`, because
+    the support floor can exclude a label. Scoring against a label with no test
+    examples silently adds a zero to every macro average.
+    """
+    return sorted(frame[column].dropna().unique().tolist())
+
+
 def score(
     name: str,
     family: str,
@@ -154,8 +164,41 @@ class ResultsLedger:
         return frame.sort_values("macro_f1", ascending=False).reset_index(drop=True)
 
     def to_markdown(self) -> str:
+        """Render the table without pulling in `tabulate`.
+
+        `DataFrame.to_markdown` needs an optional dependency purely to format a
+        handful of rows for the README; this does the same job in the stdlib.
+        """
         frame = self.to_frame()
-        return "_no results yet_" if frame.empty else frame.to_markdown(index=False)
+        if frame.empty:
+            return "_no results yet_"
+
+        headers = list(frame.columns)
+        rows = [
+            ["" if value is None or value != value else str(value) for value in record]
+            for record in frame.to_numpy().tolist()
+        ]
+        widths = [
+            max(len(headers[i]), *(len(row[i]) for row in rows)) if rows else len(headers[i])
+            for i in range(len(headers))
+        ]
+        numeric = {"macro_f1", "accuracy", "params", "size_mb", "ms_per_item"}
+
+        def render(cells: list[str]) -> str:
+            padded = [
+                cells[i].rjust(widths[i])
+                if headers[i] in numeric
+                else cells[i].ljust(widths[i])
+                for i in range(len(cells))
+            ]
+            return "| " + " | ".join(padded) + " |"
+
+        rule = "| " + " | ".join(
+            ("-" * (widths[i] - 1) + ":") if headers[i] in numeric else "-" * widths[i]
+            for i in range(len(headers))
+        ) + " |"
+
+        return "\n".join([render(headers), rule, *(render(row) for row in rows)])
 
     def save(self, path: Path | None = None) -> Path:
         path = path or (cfg.REPORT_DIR / "results.json")

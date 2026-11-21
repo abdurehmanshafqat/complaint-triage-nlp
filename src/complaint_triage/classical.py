@@ -58,7 +58,6 @@ def build_specs(seed: int = cfg.RANDOM_SEED) -> list[ClassicalSpec]:
                 LogisticRegression(
                     max_iter=1500,
                     class_weight="balanced",
-                    n_jobs=-1,
                     random_state=seed,
                 ),
             ),

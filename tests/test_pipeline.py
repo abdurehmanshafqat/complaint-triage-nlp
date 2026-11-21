@@ -87,7 +87,7 @@ def test_cleaning_funnel_accounts_for_every_dropped_row(shard: Path) -> None:
 def test_build_dataset_dedupes_splits_and_persists(shard: Path, tmp_path: Path) -> None:
     out = tmp_path / "out.parquet"
     frame, report = data.build_dataset(
-        strategy="temporal", source=shard, out_path=out
+        strategy="temporal", source=shard, out_path=out, min_class_support=0
     )
 
     assert out.exists(), "dataset was not persisted"
@@ -117,3 +117,30 @@ def test_per_class_cap_rejects_nonsense_cap() -> None:
     frame = pd.DataFrame({"label": ["a"], "text": ["x"]})
     with pytest.raises(ValueError, match="cap must be positive"):
         data.cap_per_class(frame, cap=0)
+
+
+def test_support_floor_excludes_unlearnable_classes(shard: Path, tmp_path: Path) -> None:
+    """A class with too few examples is dropped and reported, not kept silently.
+
+    Every class in this fixture has a single row, so a floor of 2 would remove
+    all of them; a floor of 1 keeps everything. The floor is applied to the
+    number of rows seen per class, before the per-class cap.
+    """
+    frame, report = data.build_dataset(
+        strategy="temporal",
+        source=shard,
+        out_path=tmp_path / "floored.parquet",
+        min_class_support=1,
+    )
+    assert not report.excluded_labels
+    assert len(frame) > 0
+
+
+def test_support_floor_rejecting_everything_is_an_error(shard: Path, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="min_class_support"):
+        data.build_dataset(
+            strategy="temporal",
+            source=shard,
+            out_path=tmp_path / "empty.parquet",
+            min_class_support=10_000,
+        )

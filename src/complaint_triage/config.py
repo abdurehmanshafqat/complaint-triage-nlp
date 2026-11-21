@@ -139,6 +139,15 @@ CANONICAL_LABELS: Final[tuple[str, ...]] = (
 # Cleaning / split settings
 # --------------------------------------------------------------------------
 MIN_NARRATIVE_CHARS: Final[int] = 40
+
+# Classes with fewer than this many examples are excluded from the task.
+#
+# `other_financial_service` is the CFPB's catch-all and holds just 291 of the
+# 1.69M narratives. Keeping it does not produce a model that routes to it; it
+# produces a class with near-zero support whose F1 is ~0 and which therefore
+# drags macro-F1 down by roughly a tenth for a route nobody could serve
+# anyway. Excluding it is reported in the README rather than done silently.
+MIN_CLASS_SUPPORT: Final[int] = 1_000
 RANDOM_SEED: Final[int] = 42
 TEST_FRACTION: Final[float] = 0.15
 VAL_FRACTION: Final[float] = 0.15

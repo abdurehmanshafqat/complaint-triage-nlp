@@ -49,6 +49,8 @@ class CleaningReport:
     # Rows that passed cleaning per class, before any per-class cap. The
     # gap against `label_counts` is how much of each class was sampled away.
     rows_available: dict[str, int] = field(default_factory=dict)
+    dropped_rare_class: int = 0
+    excluded_labels: dict[str, int] = field(default_factory=dict)
 
     def as_markdown(self) -> str:
         rows = [
@@ -57,6 +59,10 @@ class CleaningReport:
             (f"dropped: under {cfg.MIN_NARRATIVE_CHARS} chars", -self.dropped_too_short),
             ("dropped: unmapped product", -self.dropped_unmapped_product),
             ("dropped: duplicate narrative", -self.dropped_duplicate),
+            (
+                f"dropped: class under {cfg.MIN_CLASS_SUPPORT:,} examples",
+                -self.dropped_rare_class,
+            ),
             ("**kept**", self.rows_kept),
         ]
         out = ["| stage | rows |", "| --- | ---: |"]
@@ -288,6 +294,7 @@ def build_dataset(
     sample_per_class: int | None = None,
     strategy: SplitStrategy = "temporal",
     deduplicate: bool = True,
+    min_class_support: int = cfg.MIN_CLASS_SUPPORT,
     out_path: Path | None = None,
     source: Path | None = None,
     chunksize: int = 200_000,
@@ -318,6 +325,8 @@ def build_dataset(
             which needs a lot of memory on the full corpus.
         strategy: "temporal" (default) or "random".
         deduplicate: reject repeated narratives.
+        min_class_support: drop labels with fewer examples than this. Set to 0
+            to keep every label, including ones too rare to learn.
         out_path: parquet destination; defaults to data/processed.
         source: parquet file or shard directory; defaults to data/raw/parquet.
         chunksize: rows per read chunk.
@@ -370,6 +379,29 @@ def build_dataset(
 
     if not reservoirs:
         raise ValueError("no rows survived cleaning; check the source archive")
+
+    if min_class_support > 0:
+        rare = {
+            label: count
+            for label, count in counts_seen.items()
+            if count < min_class_support
+        }
+        if rare:
+            report.excluded_labels = rare
+            report.dropped_rare_class = sum(
+                len(reservoirs.get(label, [])) for label in rare
+            )
+            for label in rare:
+                reservoirs.pop(label, None)
+            log.warning(
+                "Excluded %d label(s) under the %s-example floor: %s",
+                len(rare),
+                f"{min_class_support:,}",
+                rare,
+            )
+
+    if not reservoirs:
+        raise ValueError("every class fell below min_class_support")
 
     frame = pd.DataFrame(
         [row for bucket in reservoirs.values() for row in bucket], columns=columns

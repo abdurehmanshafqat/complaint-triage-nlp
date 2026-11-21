@@ -1,0 +1,59 @@
+{
+  "complaints_temporal.parquet": {
+    "note": "honest default",
+    "strategy": "temporal",
+    "deduplicated": true,
+    "rows": 335486,
+    "rows_read": 1689573,
+    "dropped_duplicate": 344451,
+    "dropped_rare_class": 291,
+    "excluded_labels": {
+      "other_financial_service": 291
+    },
+    "n_classes": 9,
+    "splits": {
+      "train": 234842,
+      "val": 50322,
+      "test": 50322
+    },
+    "seconds": 65.9
+  },
+  "complaints_random.parquet": {
+    "note": "random split, deduped",
+    "strategy": "random",
+    "deduplicated": true,
+    "rows": 335486,
+    "rows_read": 1689573,
+    "dropped_duplicate": 344451,
+    "dropped_rare_class": 291,
+    "excluded_labels": {
+      "other_financial_service": 291
+    },
+    "n_classes": 9,
+    "splits": {
+      "train": 234842,
+      "test": 50322,
+      "val": 50322
+    },
+    "seconds": 65.7
+  },
+  "complaints_random_withdupes.parquet": {
+    "note": "random split, duplicates kept",
+    "strategy": "random",
+    "deduplicated": false,
+    "rows": 336668,
+    "rows_read": 1689573,
+    "dropped_duplicate": 0,
+    "dropped_rare_class": 292,
+    "excluded_labels": {
+      "other_financial_service": 292
+    },
+    "n_classes": 9,
+    "splits": {
+      "train": 235668,
+      "test": 50500,
+      "val": 50500
+    },
+    "seconds": 88.2
+  }
+}

@@ -1,0 +1,15 @@
+                          precision    recall  f1-score   support
+
+            bank_account      0.773     0.776     0.775      7797
+                    card      0.785     0.768     0.776      6485
+        credit_reporting      0.816     0.849     0.832      8924
+         debt_collection      0.707     0.722     0.715      4547
+money_transfer_or_crypto      0.756     0.779     0.768      6086
+                mortgage      0.879     0.912     0.895      3201
+ payday_or_personal_loan      0.738     0.570     0.643      3144
+            student_loan      0.928     0.911     0.919      5011
+vehicle_or_consumer_loan      0.801     0.823     0.812      5127
+
+                accuracy                          0.797     50322
+               macro avg      0.798     0.790     0.793     50322
+            weighted avg      0.797     0.797     0.796     50322
