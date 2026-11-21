@@ -1,0 +1,28 @@
+# data & models (fetch with scripts/download_data.py)
+data/
+models/
+*.zip
+*.csv
+*.tflite
+*.onnx
+*.keras
+*.h5
+*.npz
+*.joblib
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+*.egg-info/
+
+# notebooks: keep outputs out of diffs where large
+reports/figures/*.png
+!reports/figures/.gitkeep
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
