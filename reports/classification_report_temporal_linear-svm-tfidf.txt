@@ -1,0 +1,17 @@
+linear-svm-tfidf on temporal split, 234,842 training rows
+
+                          precision    recall  f1-score   support
+
+            bank_account      0.788     0.786     0.787      7797
+                    card      0.802     0.767     0.784      6485
+        credit_reporting      0.821     0.852     0.836      8924
+         debt_collection      0.730     0.729     0.730      4547
+money_transfer_or_crypto      0.772     0.791     0.781      6086
+                mortgage      0.892     0.924     0.908      3201
+ payday_or_personal_loan      0.724     0.646     0.683      3144
+            student_loan      0.938     0.930     0.934      5011
+vehicle_or_consumer_loan      0.820     0.833     0.827      5127
+
+                accuracy                          0.810     50322
+               macro avg      0.810     0.807     0.808     50322
+            weighted avg      0.809     0.810     0.809     50322

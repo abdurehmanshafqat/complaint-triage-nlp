@@ -1,0 +1,17 @@
+logreg-tfidf on temporal split, 234,842 training rows
+
+                          precision    recall  f1-score   support
+
+            bank_account      0.787     0.797     0.792      7797
+                    card      0.818     0.765     0.791      6485
+        credit_reporting      0.813     0.876     0.843      8924
+         debt_collection      0.748     0.725     0.736      4547
+money_transfer_or_crypto      0.776     0.789     0.783      6086
+                mortgage      0.914     0.902     0.908      3201
+ payday_or_personal_loan      0.688     0.693     0.690      3144
+            student_loan      0.951     0.910     0.930      5011
+vehicle_or_consumer_loan      0.833     0.819     0.826      5127
+
+                accuracy                          0.813     50322
+               macro avg      0.814     0.808     0.811     50322
+            weighted avg      0.814     0.813     0.813     50322

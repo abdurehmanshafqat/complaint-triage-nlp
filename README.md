@@ -128,8 +128,8 @@ on accuracy and is useless.
 
 | model | macro-F1 | accuracy | ms/item | train rows |
 | --- | ---: | ---: | ---: | ---: |
-| **linear SVM + TF-IDF** | **0.793** | 0.798 | **0.43** | 30,000 |
-| logistic regression + TF-IDF | 0.787 | 0.792 | 0.44 | 30,000 |
+| **logistic regression + TF-IDF** | **0.811** | 0.813 | 0.43 | 234,842 |
+| linear SVM + TF-IDF | 0.808 | 0.810 | **0.41** | 234,842 |
 | RBF SVM + LSA | 0.765 | 0.774 | 35.9 | 25,000 |
 | histogram GBDT + LSA | 0.756 | 0.766 | 37.4 | 80,000 |
 | random forest + LSA | 0.726 | 0.746 | 53.9 | 80,000 |
@@ -137,12 +137,20 @@ on accuracy and is useless.
 Single-item latency on CPU, measured one complaint at a time because that is how
 a queue is served, not in batches.
 
-### The cheapest model wins, by a wide margin
+### The cheapest models win, by a wide margin
 
-The linear SVM over sparse TF-IDF is both the **most accurate** and roughly
-**85–125× faster** than every tree or kernel alternative. It is also the only one
-trained on more data than it was given — it needed no subsampling to stay
-tractable.
+The two linear models over sparse TF-IDF are both the **most accurate** and
+roughly **85–130× faster** than every tree or kernel alternative. They are also
+the only ones trained on the whole training set: every other baseline had to be
+subsampled to stay tractable, which is itself part of the result.
+
+Logistic regression and the linear SVM finish 0.3 points apart — a difference
+small enough to call a tie, and smaller than the gap either opens over the next
+model down. On 30,000 rows the SVM led (0.793 to 0.787); on all 234,842 the
+ordering reverses. Both gained about two points from the extra data, which is
+worth noting on its own: the linear family was still data-limited at 30k, so
+these numbers are a genuine ceiling check rather than an artefact of a small
+sample.
 
 That is not an accident of tuning, and it is worth being precise about the cause.
 Tree ensembles and kernel SVMs cannot work on 200,000 sparse dimensions, so they
@@ -153,32 +161,39 @@ a 100,000-term vocabulary into 256 directions blurs exactly the distinctions the
 task depends on. A linear model on the uncompressed sparse matrix keeps them.
 
 The practical consequence is that this project's bar is high and cheap: any
-neural model has to beat 0.793 macro-F1 at 0.43 ms and ~8 MB, or justify itself
+neural model has to beat 0.811 macro-F1 at 0.43 ms and ~8 MB, or justify itself
 some other way. That is the honest comparison, and it is the reason the later
 stages are framed around *latency and size at matched accuracy* rather than
 around chasing a leaderboard.
 
-Per class, linear SVM (full per-model reports in `reports/`):
+Per class, logistic regression on the full training set (a report per model is
+in `reports/`):
 
 | label | precision | recall | F1 | support |
 | --- | ---: | ---: | ---: | ---: |
-| `student_loan` | 0.928 | 0.911 | **0.919** | 5,011 |
-| `mortgage` | 0.879 | 0.912 | **0.895** | 3,201 |
-| `credit_reporting` | 0.816 | 0.849 | 0.832 | 8,924 |
-| `vehicle_or_consumer_loan` | 0.801 | 0.823 | 0.812 | 5,127 |
-| `card` | 0.785 | 0.768 | 0.776 | 6,485 |
-| `bank_account` | 0.773 | 0.776 | 0.775 | 7,797 |
-| `money_transfer_or_crypto` | 0.756 | 0.779 | 0.768 | 6,086 |
-| `debt_collection` | 0.707 | 0.722 | 0.715 | 4,547 |
-| `payday_or_personal_loan` | 0.738 | **0.570** | 0.643 | 3,144 |
+| `student_loan` | 0.951 | 0.910 | **0.930** | 5,011 |
+| `mortgage` | 0.914 | 0.902 | **0.908** | 3,201 |
+| `credit_reporting` | 0.813 | 0.876 | 0.843 | 8,924 |
+| `vehicle_or_consumer_loan` | 0.833 | 0.819 | 0.826 | 5,127 |
+| `bank_account` | 0.787 | 0.797 | 0.792 | 7,797 |
+| `card` | 0.818 | 0.765 | 0.791 | 6,485 |
+| `money_transfer_or_crypto` | 0.776 | 0.789 | 0.783 | 6,086 |
+| `debt_collection` | 0.748 | 0.725 | 0.736 | 4,547 |
+| `payday_or_personal_loan` | 0.688 | 0.693 | **0.690** | 3,144 |
 
 ### Where it fails, and why that shaped the service
 
 `student_loan` and `mortgage` are easy: the vocabulary is distinctive
-("deferment", "escrow", "forbearance"). The failure is
-`payday_or_personal_loan`, at 0.570 recall — it is being swallowed by the other
-loan categories, which is unsurprising since a title loan, a personal loan and a
+("deferment", "escrow", "forbearance"). The weakest class is
+`payday_or_personal_loan` at 0.690 F1 — it is partly swallowed by the other loan
+categories, which is unsurprising since a title loan, a personal loan and a
 vehicle loan share most of their language.
+
+More data helped it disproportionately: on 30,000 rows its recall was 0.570, and
+on the full set it is 0.693. That it was the class most starved by a small sample
+and remains the class most confused at full size both point the same way — the
+boundary between loan products is genuinely thin in the text, not merely
+under-trained.
 
 This is why the companion service routes on **margin** and not confidence alone.
 A prediction of 0.55 with the runner-up at 0.54 and one of 0.55 with the

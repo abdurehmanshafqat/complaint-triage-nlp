@@ -61,7 +61,7 @@ def build_specs(seed: int = cfg.RANDOM_SEED) -> list[ClassicalSpec]:
                     random_state=seed,
                 ),
             ),
-            notes="reference point for the linear family",
+            notes="best classical result at full training size (macro-F1 0.811)",
         ),
         ClassicalSpec(
             name="linear-svm-tfidf",
@@ -69,7 +69,7 @@ def build_specs(seed: int = cfg.RANDOM_SEED) -> list[ClassicalSpec]:
                 build_word_tfidf(),
                 LinearSVC(C=0.5, class_weight="balanced", random_state=seed),
             ),
-            notes="strongest cheap baseline; the bar the neural models must clear",
+            notes="linear family; ties with logistic regression at full training size",
         ),
         ClassicalSpec(
             name="random-forest-lsa",
