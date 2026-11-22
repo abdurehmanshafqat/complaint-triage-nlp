@@ -202,6 +202,41 @@ differently. The first is an adjacent-category confusion and belongs with a
 person; sending it to a queue is how a complaint bounces between two desks for a
 week.
 
+### What the model actually learned
+
+The highest-weighted n-grams per class, from the linear model
+(`reports/top_features_temporal.json`):
+
+| label | top features |
+| --- | --- |
+| `mortgage` | mortgage, escrow, modification, ocwen, foreclosure, loancare, home, appraisal, nationstar |
+| `student_loan` | navient, nelnet, student, fedloan, loans, aes, school, acs, repayment |
+| `money_transfer_or_crypto` | coinbase, paypal, moneygram, venmo, binance, zelle, transfer, cashapp, wire |
+| `debt_collection` | debt, collection, collections, owe, ic, erc, owed, medical, afni |
+| `payday_or_personal_loan` | loan, line credit, personal loan, affirm, payday, acima, upstart, borrowed, lendingclub |
+
+This is the cheapest useful check in the project, and it passes: the model has
+learned genuine domain vocabulary — "escrow", "forbearance", "foreclosure",
+"appraisal" — rather than artefacts of redaction or boilerplate.
+
+**But look at how much of it is company names.** Navient, Nelnet and FedLoan for
+student loans; Ocwen, LoanCare and Nationstar for mortgages; Coinbase, Venmo and
+Zelle for money transfer. The model has partly learned *who the complaint is
+about* as a proxy for *what it is about*.
+
+That shortcut is accurate and fragile at the same time. It works because
+servicers specialise, and it fails the moment the roster changes: a new entrant,
+a rebrand, an acquisition, or a company moving into a product it did not serve
+before. It is also a concrete reason the temporal split is harder than a random
+one — company mix drifts across a nine-year corpus, so some of the gap between
+the two split strategies is this effect rather than genuine concept drift.
+
+Two things follow for anyone deploying this. Monitoring should watch the
+*distribution of companies* in incoming complaints, not only the model's
+confidence, because that is the leading indicator of decay. And an ablation that
+masks company names before training would measure how much of the 0.811 is
+product language and how much is a lookup table — worth doing, and not done here.
+
 ## Layout
 
 ```
