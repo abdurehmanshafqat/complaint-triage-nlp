@@ -46,5 +46,77 @@
       "vehicle_or_consumer_loan": 0.8118450149024132,
       "other_financial_service": 0.0
     }
+  },
+  {
+    "name": "random-forest-lsa",
+    "family": "classical",
+    "accuracy": 0.7458964270100552,
+    "macro_f1": 0.7259508499518252,
+    "weighted_f1": 0.740544420047891,
+    "n_params": null,
+    "size_bytes": null,
+    "latency_ms_per_item": 53.90119748997677,
+    "split_strategy": "temporal",
+    "notes": "256 LSA components; depth- and memory-bounded forest; trained on 80,000 of 234,842",
+    "per_class_f1": {
+      "bank_account": 0.734624361319624,
+      "card": 0.7298072327545005,
+      "credit_reporting": 0.8104147999789174,
+      "debt_collection": 0.6773127753303965,
+      "money_transfer_or_crypto": 0.7205652781201216,
+      "mortgage": 0.8267576386828834,
+      "payday_or_personal_loan": 0.4375131717597471,
+      "student_loan": 0.8603524683087704,
+      "vehicle_or_consumer_loan": 0.7362099233114663,
+      "other_financial_service": 0.0
+    }
+  },
+  {
+    "name": "hist-gbdt-lsa",
+    "family": "classical",
+    "accuracy": 0.765788323198601,
+    "macro_f1": 0.7559085136406508,
+    "weighted_f1": 0.7645958603527017,
+    "n_params": null,
+    "size_bytes": null,
+    "latency_ms_per_item": 37.43762758502271,
+    "split_strategy": "temporal",
+    "notes": "histogram gradient boosting on LSA features; trained on 80,000 of 234,842",
+    "per_class_f1": {
+      "bank_account": 0.7500321460717501,
+      "card": 0.7500395256916996,
+      "credit_reporting": 0.8238651661192181,
+      "debt_collection": 0.6907070486981153,
+      "money_transfer_or_crypto": 0.7324536549825953,
+      "mortgage": 0.8690755513843266,
+      "payday_or_personal_loan": 0.5441510753628257,
+      "student_loan": 0.8807851239669422,
+      "vehicle_or_consumer_loan": 0.7620673304883832,
+      "other_financial_service": 0.0
+    }
+  },
+  {
+    "name": "rbf-svm-lsa",
+    "family": "classical",
+    "accuracy": 0.7743531656134494,
+    "macro_f1": 0.7651582992050545,
+    "weighted_f1": 0.7726568249530288,
+    "n_params": null,
+    "size_bytes": null,
+    "latency_ms_per_item": 35.869498915017175,
+    "split_strategy": "temporal",
+    "notes": "subsampled: kernel SVM scales poorly in n; trained on 25,000 of 234,842",
+    "per_class_f1": {
+      "bank_account": 0.7574624500918943,
+      "card": 0.7527715326769517,
+      "credit_reporting": 0.8234654488120481,
+      "debt_collection": 0.7012287130847166,
+      "money_transfer_or_crypto": 0.7483966452886038,
+      "mortgage": 0.8765508684863523,
+      "payday_or_personal_loan": 0.5627180899908173,
+      "student_loan": 0.8908813041263373,
+      "vehicle_or_consumer_loan": 0.7729496402877698,
+      "other_financial_service": 0.0
+    }
   }
 ]

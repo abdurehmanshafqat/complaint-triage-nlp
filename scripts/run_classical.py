@@ -91,10 +91,22 @@ def main() -> int:
         best = ledger.to_frame().iloc[0]
         print(f"\nbest so far: {best['model']} macro-F1={best['macro_f1']}")
 
-    report = cfg.REPORT_DIR / f"classification_report_{args.dataset}.txt"
-    pipeline = fitted.get("linear-svm-tfidf") or next(iter(fitted.values()))
-    report.write_text(ev.report_text(test["label"], pipeline.predict(test["text"]), labels))
-    print(f"per-class report -> {report}")
+    # One report per model, named after the model.
+    #
+    # An earlier version wrote a single `classification_report_<dataset>.txt`
+    # and fell back to "whichever model was fitted first" when the linear SVM
+    # was not part of the run. A later partial run therefore overwrote the
+    # headline model's report with a different model's numbers, under a
+    # filename that still implied the headline model. Nothing errored; the
+    # file was simply wrong. Naming each report after its model removes the
+    # possibility.
+    for name, pipeline in fitted.items():
+        report = cfg.REPORT_DIR / f"classification_report_{args.dataset}_{name}.txt"
+        report.write_text(
+            f"{name} on {args.dataset} split, {len(train):,} training rows\n\n"
+            + ev.report_text(test["label"], pipeline.predict(test["text"]), labels)
+        )
+        print(f"per-class report -> {report.name}")
     return 0
 
 
