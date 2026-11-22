@@ -74,24 +74,31 @@ def build_specs(seed: int = cfg.RANDOM_SEED) -> list[ClassicalSpec]:
         ClassicalSpec(
             name="random-forest-lsa",
             pipeline=make_pipeline(
-                build_lsa(n_components=300, seed=seed),
+                build_lsa(n_components=256, max_features=100_000, seed=seed),
                 RandomForestClassifier(
-                    n_estimators=400,
-                    min_samples_leaf=2,
+                    n_estimators=200,
+                    min_samples_leaf=5,
+                    max_depth=40,
                     class_weight="balanced_subsample",
-                    n_jobs=-1,
+                    # n_jobs=2, not -1: each worker holds its own tree-building
+                    # state, so full parallelism multiplies peak memory by the
+                    # core count. An earlier run with n_jobs=-1 and 400
+                    # unbounded trees on 200k rows was killed by the OOM
+                    # reaper. Bounding depth, leaf size and worker count keeps
+                    # it inside a laptop's RAM at a small cost in accuracy.
+                    n_jobs=2,
                     random_state=seed,
                 ),
             ),
-            max_train=200_000,
-            notes="300 LSA components; sparse TF-IDF is impractical for trees",
+            max_train=80_000,
+            notes="256 LSA components; depth- and memory-bounded forest",
         ),
         ClassicalSpec(
             name="hist-gbdt-lsa",
             pipeline=make_pipeline(
-                build_lsa(n_components=300, seed=seed),
+                build_lsa(n_components=256, max_features=100_000, seed=seed),
                 HistGradientBoostingClassifier(
-                    max_iter=400,
+                    max_iter=300,
                     learning_rate=0.1,
                     early_stopping=True,
                     validation_fraction=0.1,
@@ -99,8 +106,8 @@ def build_specs(seed: int = cfg.RANDOM_SEED) -> list[ClassicalSpec]:
                     random_state=seed,
                 ),
             ),
-            max_train=200_000,
-            notes="gradient boosted trees on LSA features",
+            max_train=80_000,
+            notes="histogram gradient boosting on LSA features",
         ),
         ClassicalSpec(
             name="rbf-svm-lsa",
@@ -115,7 +122,7 @@ def build_specs(seed: int = cfg.RANDOM_SEED) -> list[ClassicalSpec]:
                     random_state=seed,
                 ),
             ),
-            max_train=40_000,
+            max_train=25_000,
             notes="subsampled: kernel SVM scales poorly in n",
         ),
     ]
